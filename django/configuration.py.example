@@ -9,7 +9,11 @@ abs_catmaid_path = ''
 
 abs_virtualenv_python_library_path = ''
 
-# CATMAID database configuration
+# CATMAID database configuration - optional
+catmaid_database_host = ''
+catmaid_database_port = ''
+
+# CATMAID database configuration - required
 catmaid_database_name = ''
 catmaid_database_username = ''
 catmaid_database_password = ''

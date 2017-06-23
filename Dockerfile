@@ -27,6 +27,6 @@ RUN pip install uwsgi \
 
 ENTRYPOINT ["/home/scripts/docker/catmaid-entry.sh"]
 
-EXPOSE 80
+EXPOSE 8000
 WORKDIR /home/django/projects/mysite
 CMD ["platform"]
