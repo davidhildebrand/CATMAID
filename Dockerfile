@@ -3,7 +3,6 @@ MAINTAINER Andrew Champion "andrew.champion@gmail.com"
 
 # Install dependencies
 RUN apt-get update -y \
-    && apt-get update -y \
     && apt-get install -y netcat \
     && apt-get install -y python-pip git \
     && apt-get install -y supervisor uwsgi-plugin-python
