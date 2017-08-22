@@ -74,7 +74,7 @@ script:
   - cd django/projects
   - python manage.py migrate --noinput
   - python manage.py collectstatic --link --noinput
-  - coverage run manage.py test catmaid.tests
+  - coverage run --source='.' manage.py test catmaid performancetests
   # Remove login requirement from QUnit test page
   - sed -i 's/login_required(\([^)]*\))/\1/g' ../applications/catmaid/urls.py
   - python manage.py runserver &
