@@ -2579,199 +2579,19 @@ SkeletonAnnotations.TracingOverlay.prototype.whenclicked = function (e) {
   return false;
 };
 
-
 /**
- * Three possible actions can happen: 1. if both insert and link are false, a
- * new node will be appended as child to the active node. 2. if insert is true,
- * a new node will be inserted between the active node and the closest neighbor
- * in this skeleton 3. if link is true, a new connector node will be created, in
- * this case postLink allows to select if if a pre or post synaptic node will be
- * created.
- *
- * If no active node is available, a new node, or (if link is true) connector,
- * is created.
+ * Create a new node or link depending on the passed in flags. Wrap this action
+ * and suspend the tracing overlay while the operation runs.
  */
 SkeletonAnnotations.TracingOverlay.prototype.createNodeOrLink = function(insert, link, postLink) {
-  // take into account current local offset coordinates and scale
-  var pos_x = this.coords.lastX;
-  var pos_y = this.coords.lastY;
-  var pos_z = this.stackViewer.z; // or this.phys2pixZ(project.coordinates.z);
-
-  // get physical coordinates for node position creation
-  var phys_x = this.pix2physX(pos_z, pos_y, pos_x);
-  var phys_y = this.pix2physY(pos_z, pos_y, pos_x);
-  var phys_z = this.pix2physZ(pos_z, pos_y, pos_x);
-
-  var targetTreenodeID,
-      atn = SkeletonAnnotations.atn;
-
-  // If activated, edit the node radius right after it was created.
-  var postCreateFn;
-  if (SkeletonAnnotations.setRadiusAfterNodeCreation) {
-    // Edit radius without showing the dialog and without centering.
-    postCreateFn = function(overlay, node) { overlay.editRadius(node.id, false, true, true); };
-  }
-
+  var handled = false;
   // To suspend field of view node updates during/post model creation,
   // individual creation functions store a promise in <create>, after the
   // execution of which the original suspend state is restored again.
   try {
     this.suspended = true;
-    var create = null;
-
-    if (insert) {
-      if (null !== atn.id && SkeletonAnnotations.TYPE_NODE === atn.type) {
-        // Insert a treenode along an edge on the active skeleton
-        var respectVirtualNodes = true;
-        this.insertNodeInActiveSkeleton(phys_x, phys_y, phys_z, atn, respectVirtualNodes);
-      }
-    } else if (link || postLink) {
-      if (null === atn.id) {
-        if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SKELETON) {
-          throw new CATMAID.Warning("You need to activate a treenode first (skeleton tracing mode)!");
-        }
-      } else {
-        if (SkeletonAnnotations.TYPE_NODE === atn.type) {
-          var targetTreenode = this.nodes[atn.id];
-          var self = this;
-          var newConnectorType = SkeletonAnnotations.newConnectorType;
-
-          var createConnector = function(linkType, connectorType, msg) {
-            if (SkeletonAnnotations.useNewConnectorTypeAsDefault) {
-              SkeletonAnnotations.newConnectorType = connectorType;
-            }
-            if (msg) {
-              CATMAID.statusBar.replaceLast(msg);
-            }
-            return self.createSingleConnector(
-                phys_x, phys_y, phys_z, pos_x, pos_y, pos_z, 5, connectorType)
-              .then(function (connectorId) {
-                return self.createLink(targetTreenode.id, connectorId, linkType);
-              });
-          };
-
-          if (postLink && !link) {
-            create = CATMAID.Connectors.linkTypes(project.id)
-              .then(function(linkTypes) {
-                return new Promise(function(resolve, reject) {
-                  if (self.connectorTypeMenu) {
-                    self.connectorTypeMenu.hide();
-                  }
-                  // Display connector link type selection UI
-                  self.connectorTypeMenu = new CATMAID.ContextMenu({
-                    select: function(selection) {
-                      // Create a new custom connector
-                      var msg = "Created " + selection.item.title.toLowerCase() +
-                          " connector with treenode #" + atn.id;
-                      var data = selection.item.data;
-                      createConnector(selection.item.data.relation, selection.item.value, msg)
-                        .then(resolve)
-                        .catch(reject);
-                    },
-                    hide: function(selected) {
-                      self.connectorTypeMenu = null;
-                      if (!selected) {
-                        resolve();
-                      }
-                    },
-                    items: linkTypes.map(function(t) {
-                      return {
-                        title: t.name,
-                        value: t.type_id,
-                        data: {
-                          relation: t.relation
-                        }
-                      };
-                    })
-                  });
-                  self.connectorTypeMenu.show(true);
-                });
-              });
-          } else if (CATMAID.Connectors.SUBTYPE_ABUTTING_CONNECTOR === newConnectorType) {
-            // Create a new abutting connection
-            create = createConnector("abutting", newConnectorType,
-                "Created abutting connector with treenode #" + atn.id);
-          } else if (CATMAID.Connectors.SUBTYPE_GAPJUNCTION_CONNECTOR === newConnectorType) {
-            // Create a new abutting connection
-            create = createConnector("gapjunction_with", newConnectorType,
-                "Created gap junction connector with treenode #" + atn.id);
-          } else if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === newConnectorType) {
-            // Create a new synaptic connector
-            var synapseType = postLink ? 'post' : 'pre';
-            create = createConnector(synapseType + "synaptic_to", newConnectorType,
-                "Created connector with " + synapseType + "synaptic treenode #" + atn.id);
-          } else {
-            CATMAID.warn("Unknown connector type selected");
-            this.suspended = false;
-            return true;
-          }
-        } else if (SkeletonAnnotations.TYPE_CONNECTORNODE === atn.type) {
-          if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === atn.subtype) {
-            // create new treenode (and skeleton) postsynaptic to activated connector
-            CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " postsynaptic to active connector");
-            create = this.createPostsynapticTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5,
-                pos_x, pos_y, pos_z, postCreateFn);
-          } else if (CATMAID.Connectors.SUBTYPE_ABUTTING_CONNECTOR === atn.subtype) {
-            // create new treenode (and skeleton) postsynaptic to activated connector
-            CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " abutting to active connector");
-            create = this.createTreenodeWithLink(atn.id, phys_x, phys_y, phys_z, -1, 5,
-                pos_x, pos_y, pos_z, "abutting", postCreateFn);
-          } else if (CATMAID.Connectors.SUBTYPE_GAPJUNCTION_CONNECTOR === atn.subtype || postLink) {
-            // create new treenode (and skeleton) postsynaptic to activated connector
-            CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " with gap junction to active connector");
-            create = this.createGapjunctionTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5,
-                pos_x, pos_y, pos_z, postCreateFn);
-          } else {
-            this.suspended = false;
-            return false;
-          }
-        }
-      }
-    } else {
-      // depending on what mode we are in do something else when clicking
-      if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SKELETON) {
-        if (SkeletonAnnotations.TYPE_NODE === atn.type || null === atn.id) {
-          // Wait for the submitter queue before determining the active node,
-          // then return the node creation promise so that node creation and its
-          // resulting active node change resolve before any other submitter queue
-          // items are processed.
-          this.submit.then((function () {
-            // Create a new treenode, either root node if atn is null, or child if
-            // it is not null
-            if (null !== SkeletonAnnotations.atn.id) {
-              var self = this;
-              return new Promise(function (resolve, reject) {
-                // Make sure the parent exists
-                SkeletonAnnotations.atn.promise().then(function(atnId) {
-                  CATMAID.statusBar.replaceLast("Created new node as child of node #" + atnId);
-                  self.createNode(atnId, null, phys_x, phys_y, phys_z, -1, 5,
-                      pos_x, pos_y, pos_z, postCreateFn).then(resolve, reject);
-                }).catch(function(error) {
-                  reject();
-                  CATMAID.handleError(error);
-                });
-              });
-            } else {
-              // Create root node
-              return this.createNode(null, null, phys_x, phys_y, phys_z, -1, 5,
-                  pos_x, pos_y, pos_z, postCreateFn);
-            }
-          }).bind(this), CATMAID.handleError);
-        } else if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === atn.subtype) {
-          // create new treenode (and skeleton) presynaptic to activated connector
-          // if the connector doesn't have a presynaptic node already
-          create = this.createPresynapticTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5, pos_x, pos_y, pos_z,
-              postCreateFn);
-        } else {
-          this.suspended = false;
-          return false;
-        }
-      } else if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SYNAPSE) {
-        // only create single synapses/connectors
-        create = this.createSingleConnector(phys_x, phys_y, phys_z, pos_x, pos_y, pos_z, 5,
-            SkeletonAnnotations.newConnectorType);
-      }
-    }
+    var create = this._createNodeOrLink(insert, link, postLink);
+    handled = !!create;
 
     if (create) {
       var reset = (function(error) {
@@ -2794,7 +2614,196 @@ SkeletonAnnotations.TracingOverlay.prototype.createNodeOrLink = function(insert,
     CATMAID.handleError(error);
   }
 
-  return true;
+  return handled;
+};
+
+
+/**
+ * Three possible actions can happen: 1. if both insert and link are false, a
+ * new node will be appended as child to the active node. 2. if insert is true,
+ * a new node will be inserted between the active node and the closest neighbor
+ * in this skeleton 3. if link is true, a new connector node will be created, in
+ * this case postLink allows to select if if a pre or post synaptic node will be
+ * created.
+ *
+ * If no active node is available, a new node, or (if link is true) connector,
+ * is created.
+ */
+SkeletonAnnotations.TracingOverlay.prototype._createNodeOrLink = function(insert, link, postLink) {
+  // take into account current local offset coordinates and scale
+  var pos_x = this.coords.lastX;
+  var pos_y = this.coords.lastY;
+  var pos_z = this.stackViewer.z; // or this.phys2pixZ(project.coordinates.z);
+
+  // get physical coordinates for node position creation
+  var phys_x = this.pix2physX(pos_z, pos_y, pos_x);
+  var phys_y = this.pix2physY(pos_z, pos_y, pos_x);
+  var phys_z = this.pix2physZ(pos_z, pos_y, pos_x);
+
+  var targetTreenodeID,
+      atn = SkeletonAnnotations.atn;
+
+  // If activated, edit the node radius right after it was created.
+  var postCreateFn;
+  if (SkeletonAnnotations.setRadiusAfterNodeCreation) {
+    // Edit radius without showing the dialog and without centering.
+    postCreateFn = function(overlay, node) { overlay.editRadius(node.id, false, true, true); };
+  }
+
+  var create = null;
+
+  if (insert) {
+    if (null !== atn.id && SkeletonAnnotations.TYPE_NODE === atn.type) {
+      // Insert a treenode along an edge on the active skeleton
+      var respectVirtualNodes = true;
+      this.insertNodeInActiveSkeleton(phys_x, phys_y, phys_z, atn, respectVirtualNodes);
+    }
+  } else if (link || postLink) {
+    if (null === atn.id) {
+      if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SKELETON) {
+        throw new CATMAID.Warning("You need to activate a treenode first (skeleton tracing mode)!");
+      }
+    } else {
+      if (SkeletonAnnotations.TYPE_NODE === atn.type) {
+        var targetTreenode = this.nodes[atn.id];
+        var self = this;
+        var newConnectorType = SkeletonAnnotations.newConnectorType;
+
+        var createConnector = function(linkType, connectorType, msg) {
+          if (SkeletonAnnotations.useNewConnectorTypeAsDefault) {
+            SkeletonAnnotations.newConnectorType = connectorType;
+          }
+          if (msg) {
+            CATMAID.statusBar.replaceLast(msg);
+          }
+          return self.createSingleConnector(
+              phys_x, phys_y, phys_z, pos_x, pos_y, pos_z, 5, connectorType)
+            .then(function (connectorId) {
+              return self.createLink(targetTreenode.id, connectorId, linkType);
+            });
+        };
+
+        if (postLink && !link) {
+          create = CATMAID.Connectors.linkTypes(project.id)
+            .then(function(linkTypes) {
+              return new Promise(function(resolve, reject) {
+                if (self.connectorTypeMenu) {
+                  self.connectorTypeMenu.hide();
+                }
+                // Display connector link type selection UI
+                self.connectorTypeMenu = new CATMAID.ContextMenu({
+                  select: function(selection) {
+                    // Create a new custom connector
+                    var msg = "Created " + selection.item.title.toLowerCase() +
+                        " connector with treenode #" + atn.id;
+                    var data = selection.item.data;
+                    createConnector(selection.item.data.relation, selection.item.value, msg)
+                      .then(resolve)
+                      .catch(reject);
+                  },
+                  hide: function(selected) {
+                    self.connectorTypeMenu = null;
+                    if (!selected) {
+                      resolve();
+                    }
+                  },
+                  items: linkTypes.map(function(t) {
+                    return {
+                      title: t.name,
+                      value: t.type_id,
+                      data: {
+                        relation: t.relation
+                      }
+                    };
+                  })
+                });
+                self.connectorTypeMenu.show(true);
+              });
+            });
+        } else if (CATMAID.Connectors.SUBTYPE_ABUTTING_CONNECTOR === newConnectorType) {
+          // Create a new abutting connection
+          create = createConnector("abutting", newConnectorType,
+              "Created abutting connector with treenode #" + atn.id);
+        } else if (CATMAID.Connectors.SUBTYPE_GAPJUNCTION_CONNECTOR === newConnectorType) {
+          // Create a new abutting connection
+          create = createConnector("gapjunction_with", newConnectorType,
+              "Created gap junction connector with treenode #" + atn.id);
+        } else if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === newConnectorType) {
+          // Create a new synaptic connector
+          var synapseType = postLink ? 'post' : 'pre';
+          create = createConnector(synapseType + "synaptic_to", newConnectorType,
+              "Created connector with " + synapseType + "synaptic treenode #" + atn.id);
+        } else {
+          CATMAID.warn("Unknown connector type selected");
+          return Promise.resolve();
+        }
+      } else if (SkeletonAnnotations.TYPE_CONNECTORNODE === atn.type) {
+        if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === atn.subtype) {
+          // create new treenode (and skeleton) postsynaptic to activated connector
+          CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " postsynaptic to active connector");
+          create = this.createPostsynapticTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5,
+              pos_x, pos_y, pos_z, postCreateFn);
+        } else if (CATMAID.Connectors.SUBTYPE_ABUTTING_CONNECTOR === atn.subtype) {
+          // create new treenode (and skeleton) postsynaptic to activated connector
+          CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " abutting to active connector");
+          create = this.createTreenodeWithLink(atn.id, phys_x, phys_y, phys_z, -1, 5,
+              pos_x, pos_y, pos_z, "abutting", postCreateFn);
+        } else if (CATMAID.Connectors.SUBTYPE_GAPJUNCTION_CONNECTOR === atn.subtype || postLink) {
+          // create new treenode (and skeleton) postsynaptic to activated connector
+          CATMAID.statusBar.replaceLast("Created treenode #" + atn.id + " with gap junction to active connector");
+          create = this.createGapjunctionTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5,
+              pos_x, pos_y, pos_z, postCreateFn);
+        } else {
+          return null;
+        }
+      }
+    }
+  } else {
+    // depending on what mode we are in do something else when clicking
+    if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SKELETON) {
+      if (SkeletonAnnotations.TYPE_NODE === atn.type || null === atn.id) {
+        // Wait for the submitter queue before determining the active node,
+        // then return the node creation promise so that node creation and its
+        // resulting active node change resolve before any other submitter queue
+        // items are processed.
+        create = this.submit.promise((function () {
+          // Create a new treenode, either root node if atn is null, or child if
+          // it is not null
+          if (null !== SkeletonAnnotations.atn.id) {
+            var self = this;
+            return new Promise(function (resolve, reject) {
+              // Make sure the parent exists
+              SkeletonAnnotations.atn.promise().then(function(atnId) {
+                CATMAID.statusBar.replaceLast("Created new node as child of node #" + atnId);
+                self.createNode(atnId, null, phys_x, phys_y, phys_z, -1, 5,
+                    pos_x, pos_y, pos_z, postCreateFn).then(resolve, reject);
+              }).catch(function(error) {
+                reject();
+                CATMAID.handleError(error);
+              });
+            });
+          } else {
+            // Create root node
+            return this.createNode(null, null, phys_x, phys_y, phys_z, -1, 5,
+                pos_x, pos_y, pos_z, postCreateFn);
+          }
+        }).bind(this));
+      } else if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === atn.subtype) {
+        // create new treenode (and skeleton) presynaptic to activated connector
+        // if the connector doesn't have a presynaptic node already
+        create = this.createPresynapticTreenode(atn.id, phys_x, phys_y, phys_z, -1, 5, pos_x, pos_y, pos_z,
+            postCreateFn);
+      } else {
+        return null;
+      }
+    } else if (SkeletonAnnotations.currentmode === SkeletonAnnotations.MODES.SYNAPSE) {
+      // only create single synapses/connectors
+      create = this.createSingleConnector(phys_x, phys_y, phys_z, pos_x, pos_y, pos_z, 5,
+          SkeletonAnnotations.newConnectorType);
+    }
+  }
+
+  return create;
 };
 
 /**
@@ -4285,6 +4294,119 @@ SkeletonAnnotations.TracingOverlay.prototype.switchBetweenTerminalAndConnector =
 };
 
 /**
+ * Delete the connector from the database and removes it from the current view
+ * and local objects.
+ */
+SkeletonAnnotations.TracingOverlay.prototype._deleteConnectorNode =
+    function(connectornode) {
+  // Suspennd the node before submitting the request to note catch mouse
+  // events on the removed node.
+  connectornode.suspend();
+  var self = this;
+  return this.submit.promise(function() {
+    self.nodeIDsNeedingSync.delete(connectornode.id);
+    var command = new CATMAID.RemoveConnectorCommand(self.state, project.id, connectornode.id);
+    return CATMAID.commands.execute(command)
+      .then(function(result) {
+        // If there was a presynaptic node, select it
+        var preIDs  = Object.keys(connectornode.pregroup);
+        var postIDs = Object.keys(connectornode.postgroup);
+        var gjIDs = Object.keys(connectornode.gjgroup);
+        if (preIDs.length > 0) {
+            self.selectNode(preIDs[0]).catch(CATMAID.handleError);
+        } else if (postIDs.length > 0) {
+            self.selectNode(postIDs[0]).catch(CATMAID.handleError);
+        } else if (gjIDs.length > 0) {
+            self.selectNode(gjIDs[0]).catch(CATMAID.handleError);
+        } else {
+            self.activateNode(null);
+        }
+
+        // Delete this connector from overlay (to not require a database update).
+        var connectorId = connectornode.id;
+        delete self.nodes[connectorId];
+        connectornode.obliterate();
+        self.pixiLayer._renderIfReady();
+
+        CATMAID.statusBar.replaceLast("Deleted connector #" + connectorId);
+      })
+      .catch(CATMAID.handleError);
+  }, CATMAID.handleError);
+};
+
+/**
+ * Delete the node from the database and removes it from the current view and
+ * local objects.
+ */
+SkeletonAnnotations.TracingOverlay.prototype._deleteTreenode =
+    function(node, wasActiveNode) {
+  var self = this;
+  // Make sure all other pending tasks are done before the node is deleted.
+  return this.submit.then(function() {
+    var command = new CATMAID.RemoveNodeCommand(self.state, project.id, node.id);
+    return CATMAID.commands.execute(command);
+  }).then(function(json) {
+    // nodes not refreshed yet: node still contains the properties of the deleted node
+    // ensure the node, if it had any changes, these won't be pushed to the database: doesn't exist anymore
+    self.nodeIDsNeedingSync.delete(node.id);
+
+    // Delete any connector links
+    for (var connectorId in node.connectors) {
+      var connector = self.nodes[connectorId];
+      if (connector) {
+        var link = node.connectors[connectorId];
+        connector.removeLink(link);
+        connector.drawEdges(true);
+      }
+    }
+
+    // Delete this node from overlay (to not require a database update).
+    var children = node.children;
+    var parent = node.parent;
+    delete self.nodes[node.id];
+    if (children) {
+      for (var childId in children) {
+        var child = children[childId];
+        child.parent = parent;
+      }
+    }
+    if (parent) {
+      delete parent.children[node.id];
+    }
+    node.obliterate();
+    node.drawEdges();
+    self.pixiLayer._renderIfReady();
+
+    // activate parent node when deleted
+    if (wasActiveNode) {
+      if (json.parent_id) {
+        self.selectNode(json.parent_id);
+      } else {
+        // No parent. But if this node was postsynaptic or presynaptic
+        // to a connector, the connector must be selected:
+        var pp = self.findConnectors(node.id);
+        // Try first connectors for which node is postsynaptic:
+        if (pp[1].length > 0) {
+          self.selectNode(pp[1][0]).catch(CATMAID.handleError);
+        // Then try connectors for which node is presynaptic
+        } else if (pp[0].length > 0) {
+          self.selectNode(pp[0][0]).catch(CATMAID.handleError);
+        // Then try connectors for which node has gap junction with
+        } else if (pp[2].length > 0) {
+          self.selectNode(pp[2][0]).catch(CATMAID.handleError);
+        } else {
+          self.activateNode(null);
+        }
+      }
+    }
+    // Nodes are refreshed due to the change event the neuron controller emits
+    CATMAID.statusBar.replaceLast("Deleted node #" + node.id);
+  })
+  .promise()
+  .catch(CATMAID.handleError);
+};
+
+/**
  * Delete a node with the given ID. The node can either be a connector or a
  * treenode.
  */
@@ -4331,90 +4453,28 @@ SkeletonAnnotations.TracingOverlay.prototype.deleteNode = function(nodeId) {
 
   // Call actual delete methods defined below (which are callable due to
   // hoisting)
+  var del;
   switch (node.type) {
     case SkeletonAnnotations.TYPE_CONNECTORNODE:
-      deleteConnectorNode(node);
+      this.suspended = true;
+      del = this._deleteConnectorNode(node);
       break;
     case SkeletonAnnotations.TYPE_NODE:
-      deleteTreenode(node, isActiveNode);
+      this.suspended = true;
+      del = this._deleteTreenode(node, isActiveNode);
       break;
   }
 
-  /**
-   * Delete the connector from the database and removes it from the current view
-   * and local objects.
-   */
-  function deleteConnectorNode(connectornode) {
-    // Suspennd the node before submitting the request to note catch mouse
-    // events on the removed node.
-    connectornode.suspend();
-    self.submit.then(function() {
-      self.nodeIDsNeedingSync.delete(connectornode.id);
-      var command = new CATMAID.RemoveConnectorCommand(self.state, project.id, connectornode.id);
-      CATMAID.commands.execute(command)
-        .then(function(result) {
-          // If there was a presynaptic node, select it
-          var preIDs  = Object.keys(connectornode.pregroup);
-          var postIDs = Object.keys(connectornode.postgroup);
-          var gjIDs = Object.keys(connectornode.gjgroup);
-          if (preIDs.length > 0) {
-              self.selectNode(preIDs[0]).catch(CATMAID.handleError);
-          } else if (postIDs.length > 0) {
-              self.selectNode(postIDs[0]).catch(CATMAID.handleError);
-          } else if (gjIDs.length > 0) {
-              self.selectNode(gjIDs[0]).catch(CATMAID.handleError);
-          } else {
-              self.activateNode(null);
-          }
-          // capture ID prior to refreshing nodes and connectors
-          var cID = connectornode.id;
-          // Refresh all nodes in any case, to reflect the new state of the database
-          self.updateNodes();
+  if (del) {
+    var reset = (function() {
+      this.suspended = false;
+    }).bind(this);
+    del.then(reset)
+      .catch(function(error) {
+        reset();
+        CATMAID.handleError(error);
+      });
 
-          CATMAID.statusBar.replaceLast("Deleted connector #" + cID);
-        })
-        .catch(CATMAID.handleError);
-    }, CATMAID.handleError);
-  }
-
-  /**
-   * Delete the node from the database and removes it from the current view and
-   * local objects.
-   */
-  function deleteTreenode(node, wasActiveNode) {
-    // Make sure all other pending tasks are done before the node is deleted.
-    self.submit.then(function() {
-      var command = new CATMAID.RemoveNodeCommand(self.state, project.id, node.id);
-      return CATMAID.commands.execute(command);
-    }).then(function(json) {
-      // nodes not refreshed yet: node still contains the properties of the deleted node
-      // ensure the node, if it had any changes, these won't be pushed to the database: doesn't exist anymore
-      self.nodeIDsNeedingSync.delete(node.id);
-      // activate parent node when deleted
-      if (wasActiveNode) {
-        if (json.parent_id) {
-          self.selectNode(json.parent_id);
-        } else {
-          // No parent. But if this node was postsynaptic or presynaptic
-          // to a connector, the connector must be selected:
-          var pp = self.findConnectors(node.id);
-          // Try first connectors for which node is postsynaptic:
-          if (pp[1].length > 0) {
-            self.selectNode(pp[1][0]).catch(CATMAID.handleError);
-          // Then try connectors for which node is presynaptic
-          } else if (pp[0].length > 0) {
-            self.selectNode(pp[0][0]).catch(CATMAID.handleError);
-          // Then try connectors for which node has gap junction with
-          } else if (pp[2].length > 0) {
-            self.selectNode(pp[2][0]).catch(CATMAID.handleError);
-          } else {
-            self.activateNode(null);
-          }
-        }
-      }
-      // Nodes are refreshed due to the change event the neuron controller emits
-      CATMAID.statusBar.replaceLast("Deleted node #" + node.id);
-    }, CATMAID.handleError);
   }
 
   return true;

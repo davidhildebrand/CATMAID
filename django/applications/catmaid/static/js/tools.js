@@ -226,11 +226,15 @@ CATMAID.tools = CATMAID.tools || {};
    * Copy from source[sourceField] to target[targetField] if and only if both
    * are defined.
    */
-  tools.copyIfDefined = function(source, target, sourceField, targetField) {
+  tools.copyIfDefined = function(source, target, sourceField, targetField, mapFn) {
     targetField = targetField || sourceField;
     if (source && source.hasOwnProperty(sourceField) &&
         target && target.hasOwnProperty(targetField)) {
-      target[targetField] = source[sourceField];
+      if (CATMAID.tools.isFn(mapFn)) {
+        target[targetField] = mapFn(source[sourceField]);
+      } else {
+        target[targetField] = source[sourceField];
+      }
     }
   };
 
@@ -444,14 +448,16 @@ CATMAID.tools = CATMAID.tools || {};
       }
 
       var pretty = "";
+      var addedComponents = 0;
       for (var i=0; i<values.length; ++i) {
-        var val = Math.round(values[i]);
+        var val = Math.floor(values[i]);
         if(val <= 0) continue;
-        if (i > 0) {
+        if (addedComponents > 0) {
           pretty += " ";
         }
 
         pretty += val + units[i];
+        ++addedComponents;
       }
 
       // If there is no valid time representation found, state the passed in

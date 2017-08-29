@@ -16,6 +16,9 @@
     // The time interval for the contribution table, default to days
     var timeUnit = "day";
 
+    // Whether import activity should be included in the displayed statistics.
+    this.includeImports = false;
+
     var update_stats_fields = function(data) {
       $("#skeletons_created").text(data.skeletons_created);
       $("#treenodes_created").text(data.treenodes_created);
@@ -244,10 +247,19 @@
     var update_piechart = function(data, chart_name) {
       var userIds = Object.keys(data);
       var userNodeCounts = userIds.map(function(userId) {
-        return this[userId];
+        var count = this[userId];
+        // Due to the way Raphael renders a single 100% user, no pie chart
+        // unless there is at least one other value > 0. Therefore, zero is not
+        // represented as zero for Raphael, but almost zero.
+        return count === 0 ? 0.00001 : count;
       }, data);
 
-      $(chart_name).empty();
+      if (userNodeCounts.length === 1) {
+        userIds.push("Anonymous");
+        userNodeCounts.push(0.00001);
+      }
+
+      $('#' + chart_name).empty();
 
       var x = 90, y = 100, radius = 80, height = 200;
       // Create basic pie chart without any labels
@@ -296,9 +308,11 @@
                 'stroke': color,
                 'fill': color,
             });
-        // Draw label
-        var labelText = e.others ? "Others" :
-          (CATMAID.User.safe_get(userId).login + " (" + e.value + ")");
+        // Draw label, the rounding is needed to to a corner case with a single
+        // 100% users with other zero contribution users, for which we set the
+        // zero values to 0.00001 above.
+        var labelText = (e.others ? "Others" : CATMAID.User.safe_get(userId).login) +
+            " (" + Math.round(e.value) + ")";
         var text = rpie.text(l_x + 2 * circ_r + 10, l_y + circ_r, labelText)
           .attr({
             'text-anchor': 'start',
@@ -442,10 +456,19 @@
     };
 
     this.refresh_project_statistics = function() {
-      refresh_nodecount();
       this.refresh_history();
+      this.refreshNodecount();
+    };
 
-      // d3.json(django_url + project.id + '/stats/history', update_linegraph);
+    this.refreshNodecount = function() {
+      return CATMAID.fetch(project.id + '/stats/nodecount', 'GET', {
+          with_imports: this.includeImports
+        })
+        .then(function(response) {
+          // The respose maps user IDs to number of nodes
+          update_piechart(response, "piechart_treenode_holder");
+        })
+        .catch(CATMAID.handleError);
     };
 
     this.refresh_history = function() {
@@ -469,16 +492,6 @@
       CATMAID.fetch(project.id + '/stats/editor')
         .then(function(response) {
           update_piechart(response, "piechart_editor_holder");
-        })
-        .catch(CATMAID.handleError);
-      return true;
-    };
-
-    var refresh_nodecount = function() {
-      CATMAID.fetch(project.id + '/stats/nodecount')
-        .then(function(response) {
-          // The respose maps user IDs to number of nodes
-          update_piechart(response, "piechart_treenode_holder");
         })
         .catch(CATMAID.handleError);
       return true;
@@ -510,6 +523,25 @@
   ProjectStatistics.prototype.getWidgetConfiguration = function() {
     var config = {
       contentID: "project_stats_widget",
+      controlsID: "project_stats_controls",
+      createControls: function(controls) {
+        var self = this;
+
+        // If this user has has can_administer permissions in this project,
+        // buttons to access additional tools are addeed.
+        if (userAnalyticsAccessible(project.id)) {
+          var userAnalytics = document.createElement('input');
+          userAnalytics.setAttribute("type", "button");
+          userAnalytics.setAttribute("value", "User Analytics");
+          userAnalytics.onclick = function() {
+            openUserAnalytics({
+              startDate: $("#stats-history-start-date").val(),
+              endDate: $("#stats-history-end-date").val()
+            });
+          };
+          controls.appendChild(userAnalytics);
+        }
+      },
       createContent: function(container) {
         container.innerHTML =
           '<div class="project-stats">' +
@@ -542,9 +574,27 @@
           '</div>' +
           '<br clear="all" />' +
           '<h3>Nodes created by user</h3>' +
+          '<div class="buttonpanel" data-role="piechart_treenode_controls"></div>' +
           '<div id="piechart_treenode_holder"></div>' +
           '<br clear="all" />' +
           '</div>';
+
+        var self = this;
+
+        var includeImports = document.createElement('label');
+        includeImports.title = "If checked, all statistics will also include " +
+            "import activity. Is only precise if history tracking is enabled.";
+        var includeImportsCb = document.createElement('input');
+        includeImportsCb.setAttribute('type', 'checkbox');
+        includeImportsCb.checked = this.includeImports;
+        includeImportsCb.onchange = function() {
+          self.includeImports = this.checked;
+          self.refreshNodecount();
+        };
+        includeImports.appendChild(includeImportsCb);
+        includeImports.appendChild(document.createTextNode('Include imports'));
+
+        $('div[data-role=piechart_treenode_controls]', container).append(includeImports);
       },
       init: function() {
         var self = this;
@@ -568,24 +618,6 @@
         this.refresh_project_statistics();
       }
     };
-
-    // If this user has has can_administer permissions in this project,
-    // buttons to access additional tools are addeed.
-    if (userAnalyticsAccessible(project.id)) {
-      config['controlsID'] = 'project_stats_controls';
-      config['createControls'] = function(controls) {
-        var userAnalytics = document.createElement('input');
-        userAnalytics.setAttribute("type", "button");
-        userAnalytics.setAttribute("value", "User Analytics");
-        userAnalytics.onclick = function() {
-          openUserAnalytics({
-            startDate: $("#stats-history-start-date").val(),
-            endDate: $("#stats-history-end-date").val()
-          });
-        };
-        controls.appendChild(userAnalytics);
-      };
-    }
 
     return config;
   };
@@ -615,7 +647,17 @@
   // Register widget with CATMAID
   CATMAID.registerWidget({
     key: "statistics",
-    creator: ProjectStatistics
+    creator: ProjectStatistics,
+    state: {
+      getState: function(widget) {
+        return {
+          includeImports: widget.includeImports
+        };
+      },
+      setState: function(widget, state) {
+        CATMAID.tools.copyIfDefined(state, widget, "includeImports");
+      }
+    }
   });
 
 })(CATMAID);

@@ -46,9 +46,30 @@ var WindowMaker = new function()
       try {
         return storeWidgetState(widget, widgetStateManager);
       } catch (e) {
-        CATMAID.warn("Coudldn't save widget state");
+        CATMAID.warn("Coudln't save widget state");
         return false;
       }
+    }
+  };
+
+  /**
+   * Clear the stored state of a widget if there is a state manager available
+   * for it.
+   */
+  CATMAID.clearSavedWidgetState = function(widget) {
+    var stateManager = stateManagers.get(widget.constructor);
+    if (stateManager) {
+      try {
+        var key = windowManagerStoragePrefix + stateManager.key;
+        localStorage.removeItem(key);
+        return true;
+      } catch (e) {
+        CATMAID.warn("Coudln't save widget state");
+        return false;
+      }
+    } else {
+      CATMAID.warn("No state manager found");
+      return false;
     }
   };
 
@@ -257,7 +278,7 @@ var WindowMaker = new function()
 
     // Widgets can announce they have filtering support
     if (config.filter) {
-      DOM.addFiltereControlsToggle(win, 'Filter: ' +
+      DOM.addFilterControlsToggle(win, 'Filter: ' +
           instance.getName(), config.filter);
     }
 
@@ -345,7 +366,7 @@ var WindowMaker = new function()
     var bar = document.createElement( "div" );
     bar.id = "3d_viewer_buttons";
     bar.setAttribute('class', 'buttonpanel');
-    DOM.addFiltereControlsToggle(win, 'Filter: ' +
+    DOM.addFilterControlsToggle(win, 'Filter: ' +
         WA.getName(), {
           rules: WA.filterRules,
           update: WA.updateFilter.bind(WA)

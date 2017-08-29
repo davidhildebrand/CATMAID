@@ -287,6 +287,15 @@
           }
         };
         panel.appendChild(saveStateButton);
+
+        var resetStateButton = document.createElement('button');
+        resetStateButton.appendChild(document.createTextNode('Clear saved settings'));
+        resetStateButton.onclick = function() {
+          if (CATMAID.clearSavedWidgetState(widget)) {
+            CATMAID.msg('Success', 'Stored widget settings cleared');
+          }
+        };
+        panel.appendChild(resetStateButton);
       }
 
       // Add as first element after caption and event catcher
@@ -398,7 +407,7 @@
    * Inject an extra button into the caption of a window. This button allows to
    * show and hide filter controls for a widget.
    */
-  DOM.addFiltereControlsToggle = function(win, title, options) {
+  DOM.addFilterControlsToggle = function(win, title, options) {
     title = title || 'Toggle filter controls';
 
     // A toggle function that also allows to recreate the UI.

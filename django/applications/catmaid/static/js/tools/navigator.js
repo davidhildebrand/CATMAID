@@ -36,7 +36,11 @@
         388,
         388,
         1,
-        function( val ){ CATMAID.statusBar.replaceLast( "z: " + val ); return; } );
+        function( val ){ CATMAID.statusBar.replaceLast( "z: " + val ); return; },
+        undefined,
+        undefined,
+        undefined,
+        this.validateZ.bind(this));
 
     this.slider_s = new CATMAID.Slider(
         CATMAID.Slider.HORIZONTAL,
@@ -180,8 +184,15 @@
 
     this.changeSlice = function(val, step)
     {
-      val = self.stackViewer.toValidZ(val, step < 0 ? -1 : 1);
-      self.stackViewer.moveToPixel( val, self.stackViewer.y, self.stackViewer.x, self.stackViewer.s );
+      try {
+        val = self.stackViewer.toValidZ(val, step < 0 ? -1 : 1);
+        self.stackViewer.moveToPixel( val, self.stackViewer.y, self.stackViewer.x, self.stackViewer.s );
+      } catch (error) {
+        // Due to the way, sliders area currently used, we have to reset the
+        // slider value.
+        self.slider_z.setByValue( self.stackViewer.z, true );
+        CATMAID.handleError(error);
+      }
     };
 
     var smoothChangeSlice = function (e, step) {
@@ -545,11 +556,12 @@
       {
         self.slider_z.getView().parentNode.style.display = "block";
       }
+      var validSections = self.stackViewer.getValidSections();
       self.slider_z.update(
         undefined,
         undefined,
-        { major: self.stackViewer.primaryStack.slices.filter(function(el,ind,arr) { return (ind % 10) === 0; }),
-          minor: self.stackViewer.primaryStack.slices },
+        { major: validSections.filter(function(e, i) { return i % 10 === 0; }),
+          minor: validSections },
         self.stackViewer.z,
         self.changeSliceDelayed );
 
@@ -633,6 +645,14 @@
       return result;
     };
   }
+
+  Navigator.prototype.validateZ = function(val) {
+    try {
+      return this.stackViewer.isValidZ(val);
+    } catch (error) {
+      return false;
+    }
+  };
 
   Navigator.Settings = new CATMAID.Settings(
       'navigator',

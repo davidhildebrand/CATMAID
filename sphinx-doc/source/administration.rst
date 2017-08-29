@@ -136,6 +136,19 @@ and the actual ``pg_dump`` call is executed as `postgres` user with the help of
 more complicated than this, it is recommended to create a script file and call
 this from cron.
 
+Modifying the database directly
+-------------------------------
+
+To avoid database triggers firing during direct database modifications, the
+following SQL can be used to disable triggers temporarily::
+
+  SET session_replication_role = replica;
+  
+  /* Do your edits */
+  
+  SET session_replication_role = DEFAULT;
+
+
 .. _performance-tuning:
 
 Adding custom code
@@ -308,6 +321,11 @@ CATMAID
   number of returned nodes can be limited. This can be done by setting
   ``NODE_LIST_MAXIMUM_COUNT = <number>`` in the ``settings.py`` file to a
   maximum number of nodes to be queried (e.g. 20000).
+
+* If neuron reconstruction statistics are slow to compute, consider running the
+  management command ``manage.py catmaid_populate_summary_tables`` to populate
+  an optional statistics summary table. Consider running this command regularly
+  over, e.g. over night using Celery or a cron job.
 
 Making CATMAID available through SSL
 ------------------------------------

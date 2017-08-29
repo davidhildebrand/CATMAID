@@ -197,18 +197,18 @@
       }
 
       // Insert a text div for the neuron name in the canvas window title bar
-      var neuronNameDisplayID = "neuronName" + stackViewer.getId();
-      var neuronNameDisplay = document.getElementById(neuronNameDisplayID);
-      if (!neuronNameDisplay) {
+      var activeElementId = "active-element" + stackViewer.getId();
+      var activeElement = document.getElementById(activeElementId);
+      if (!activeElement) {
         var stackFrame = stackViewer.getWindow().getFrame();
-        neuronnameDisplay = document.createElement("p");
-        neuronnameDisplay.id = neuronNameDisplayID;
-        neuronnameDisplay.className = "neuronname";
+        activeElement = document.createElement("p");
+        activeElement.id = activeElementId;
+        activeElement.classList.add("active-element");
         var spanName = document.createElement("span");
         spanName.appendChild(document.createTextNode(""));
-        neuronnameDisplay.appendChild(spanName);
-        stackFrame.appendChild(neuronnameDisplay);
-        setNeuronNameInTopbars(SkeletonAnnotations.getActiveSkeletonId());
+        activeElement.appendChild(spanName);
+        stackFrame.appendChild(activeElement);
+        setActiveElemenTopBarText(SkeletonAnnotations.getActiveSkeletonId());
       }
 
       return layer;
@@ -220,7 +220,7 @@
     function closeStackViewer(stackViewer) {
       // Unregister the neuron name label from the neuron name service and
       // remove it.
-      var label = $('#neuronName' + stackViewer.getId());
+      var label = $('#active-element' + stackViewer.getId());
       var labelData = label.data();
       if (labelData) CATMAID.NeuronNameService.getInstance().unregister(labelData);
       label.remove();
@@ -359,7 +359,7 @@
      */
     function clearTopbars(text) {
       project.getStackViewers().forEach(function(stackViewer) {
-        var label = $('#neuronName' + stackViewer.getId());
+        var label = $('#active-element' + stackViewer.getId());
         label.text(text || '');
         var labelData = label.data();
         if (labelData) CATMAID.NeuronNameService.getInstance().unregister(labelData);
@@ -370,8 +370,8 @@
      * Set the text in the small bar next to the close button of each stack
      * viewer to the name of the skeleton as it is given by the nameservice.
      */
-    function setNeuronNameInTopbars(skeletonID, prefix) {
-      if (!skeletonID) {
+    function setActiveElemenTopBarText(skeletonId, prefix) {
+      if (!skeletonId) {
         clearTopbars();
         return;
       }
@@ -380,21 +380,25 @@
       prefix = prefix || '';
 
       project.getStackViewers().forEach(function(stackViewer) {
-        var label = $('#neuronName' + stackViewer.getId());
+        var label = $('#active-element' + stackViewer.getId());
         if (0 === label.length) return;
 
-        CATMAID.NeuronNameService.getInstance().unregister(label.data());
+        var labelData = label.data();
+        if (labelData) {
+          CATMAID.NeuronNameService.getInstance().unregister(labelData);
+        }
 
-        label.data('skeleton_id', skeletonID);
+        // If a skeleton is selected, register with neuron name service.
+        label.data('skeleton_id', skeletonId);
         label.data('updateNeuronNames', function () {
           label.text(prefix + CATMAID.NeuronNameService.getInstance().getName(this.skeleton_id));
         });
 
         var models = {};
-        models[skeletonID] = {};
+        models[skeletonId] = {};
         CATMAID.NeuronNameService.getInstance().registerAll(label.data(), models)
           .then(function() {
-            label.text(prefix + CATMAID.NeuronNameService.getInstance().getName(skeletonID));
+            label.text(prefix + CATMAID.NeuronNameService.getInstance().getName(skeletonId));
           });
       });
     }
@@ -406,7 +410,7 @@
     function handleActiveNodeChange(node, skeletonChanged) {
       if (node && node.id) {
         if (skeletonChanged && SkeletonAnnotations.TYPE_NODE === node.type) {
-          setNeuronNameInTopbars(node.skeleton_id);
+          setActiveElemenTopBarText(node.skeleton_id);
         } else if (SkeletonAnnotations.TYPE_CONNECTORNODE === node.type) {
           if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === node.subtype) {
             // Retrieve presynaptic skeleton
@@ -416,8 +420,8 @@
             .then(function(json) {
               var presynaptic_to = json[0] ? json[0][1].presynaptic_to : false;
               if (presynaptic_to) {
-                setNeuronNameInTopbars(presynaptic_to, 'Connector ' + node.id +
-                    ', presynaptic partner: ');
+                setActiveElemenTopBarText(presynaptic_to, 'Connector ' +
+                    node.id + ', presynaptic partner: ');
               } else {
                 clearTopbars('Connector ' + node.id + ' (no presynatpic partner)');
               }
@@ -1081,7 +1085,7 @@
 
     this.addAction(new CATMAID.Action({
       helpText: "Move to previous node in segment for review. At an end node, moves one section beyond for you to check that it really ends.",
-      keyShortcuts: { 'Q': [ 'q' ] },
+      keyShortcuts: { 'Q': [ 'q', 'Shift + q' ] },
       run: function (e) {
         if (!CATMAID.mayEdit())
           return false;

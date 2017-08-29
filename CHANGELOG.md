@@ -15,8 +15,56 @@
   through a cron job or Celery every night. Because summary updates are
   incremental by default, they don't take much time to update.
 
+- CATMAID's Docker images changed: The existing `catmaid/catmaid` image is now
+  only a base image that is used for a simple standalone demo image, available
+  as `catmaid/catmaid-standalone`. Additionally, the base image is used in a new
+  docker-compose setup, which can be used if persistent data is required. The
+  documentation has been updared with all the details.
+
 
 ### Features and enhancements
+
+Project/user statistics:
+
+- The widget should now be much faster.
+
+- Import actions are not counted anymore by default. The "Include imports"
+  checkbox can be used to change this.
+
+- State saving is now supported.
+
+
+Neuron history:
+
+- Events by different users are now collected in separate bouts to attribute
+  parallel user activity. To restore the previous behavior (users are ignored)
+  the "Merge parallel events" checkbox can be checked.
+
+- State saving is now supported
+
+- Individual neurons can be removed with the help of an "X" icon in the firs
+  column.
+
+- A "total time" column has been added, which aggregates time across all active
+  bouts formed by both tracing and review events. Since events are binnned in
+  bouts, the total time is not just the sum of both tracing time and review
+  time.
+
+
+Node filters:
+
+- A Reconstruction Sampler interval can now be used as a node filter. This
+  allows e.g. reviewing only an interval or look only at the connectivity of
+  the interval.
+
+
+Reconstruction sampler:
+
+- Interval reviews can now be initiated directly from the interval step table.
+  It will open a new review widget with pre-set interval filter and added
+  skeleton. The same is possible from the synapse workflow step using the
+  "Review interval" button.
+
 
 Miscellaneous:
 
@@ -30,11 +78,39 @@ Miscellaneous:
 - The dialog to add a new annotation displays now the existing annotations as
   well.
 
-- Project/user statistics: the widget should now be much faster.
+- Tabbed windows: changing window aliases are now reflected in tab headers.
+
+- The performance of node creation and deletion operations has been improved by
+  preventing full node updates after these operations.
+
+- Widgets with state saving support now also support removing previously saved
+  states through a button in the widget controls available through the window
+  icon in the widget title bar.
+
+- The Selection Tool (the first icon in the top bar) has been removed, because
+  it didn't provide any functionality. It is replaced by an icon to show the
+  "Open Widget" dialog, which can otherwise be shown using Ctrl + Space.
 
 
 ### Bug fixes
 
+- Review widget: moving in reverse direction from a virtual node doesn't show
+  error anymore.
+
+- Review widget: the Shift + Q key combination to select the next unreviewed
+  node in downstream direction is respected again.
+
+- Key combinations involving the Alt key were not respected on Mac OS. This is
+  fixed now.
+
+- Reconstruction sampler: the list of connectors in the selected interval of the
+  synapse workflow step is now complete when refreshed.
+
+- 3D viewer: the error shown when changing skeleton properties with an active
+  connector restriction is fixed.
+
+- The neuron history widget now calculates both tracing time and review time
+  correctly.
 
 
 ## 2017.07.28
