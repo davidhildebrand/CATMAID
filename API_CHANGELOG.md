@@ -2,6 +2,35 @@ This changelog notes changes to API endpoints that are documented and listed
 through Swagger. Changes to undocumented, internal CATMAID APIs are not
 included in this changelog.
 
+## Under development
+
+### Additions
+
+None.
+
+### Modifications
+
+- `POST /{project_id}/treenodes/{treenode_id}/info`:
+  This API endpoint is changed to only accept GET requests. Using POST will
+  raise an error.
+
+- `GET /{project_id}/stats/nodecount`:
+  The response format changed. Now a dictionary mapping user IDs to node counts
+  is returned.
+
+- `GET /{project_id}/stats/editor`:
+  The response format changed. Now a dictionary mapping user IDs to the number
+  of edited nodes is returned.
+
+### Deprecations
+
+None.
+
+### Removals
+
+None.
+
+
 ## 2017.07.28
 
 ### Additions

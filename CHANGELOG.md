@@ -1,6 +1,46 @@
+## Under development
+
+
+### Notes
+
+- This release adds optional statics summary tables, which can increase the
+  performance of project/user statistics significantly, but statistics will also
+  be correct without them. The additional table keeps aggregated information
+  about various user actions. To initialize this table, the following
+  manangement command has to be run after the migration:
+
+    ./manage.py catmaid_populate_summary_tables
+
+  To maintain good performance, this command has to be run regularly, e.g.
+  through a cron job or Celery every night. Because summary updates are
+  incremental by default, they don't take much time to update.
+
+
+### Features and enhancements
+
+Miscellaneous:
+
+- If multiple tile layers are used, the stack viewer layer settings (blue white
+  box in lower left corner) allow to set which stacks should be respected if
+  broken sections are skipped. This can be done through the "Skip broken
+  sections of stacks" drop-down menu. Whether layers added after the first layer
+  should be respected by default when checking for broken sections can be set in
+  the Settings Widget in the "Stack view" section.
+
+- The dialog to add a new annotation displays now the existing annotations as
+  well.
+
+- Project/user statistics: the widget should now be much faster.
+
+
+### Bug fixes
+
+
+
 ## 2017.07.28
 
 Contributors: Chris Barnes, Albert Cardona, Tom Kazimiers, Daniel Witvliet
+
 ### Notes
 
 - Prepared statements can now also be used together with connection pooling.

@@ -39,7 +39,7 @@
     this.historyRequestId = undefined;
     // The current history animation, if any
     this.history = undefined;
-    // Map loaed volume IDs to an array of Three.js meshes
+    // Map loaded volume IDs to an array of Three.js meshes
     this.loadedVolumes = {};
     // Current set of filtered connectors (if any)
     this.filteredConnectors = null;
@@ -1546,7 +1546,7 @@
     }).bind(this))
     .then((function() {
       if (this.options.connector_filter) {
-        self.refreshRestrictedConnectors();
+        this.refreshRestrictedConnectors();
       }
       CATMAID.tools.callIfFn(callback);
     }).bind(this))

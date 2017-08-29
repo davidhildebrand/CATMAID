@@ -1747,7 +1747,7 @@ SkeletonAnnotations.TracingOverlay.prototype.createTreenodeLink = function (from
     var fromid = nids[0], toid=nids[1];
     self.submit(
       django_url + project.id + '/treenodes/' + toid + '/info',
-      'POST',
+      'GET',
       undefined,
       function(json) {
         var from_model = SkeletonAnnotations.activeSkeleton.createModel();
@@ -2263,8 +2263,8 @@ SkeletonAnnotations.TracingOverlay.prototype.refreshNodesFromTuples = function (
   // Set curently allowed section distances, to correctly account for broken
   // sections.
   var sv = this.stackViewer;
-  var dToSecBefore = sv.primaryStack.validZDistanceBefore(sv.z);
-  var dToSecAfter = sv.primaryStack.validZDistanceAfter(sv.z);
+  var dToSecBefore = sv.validZDistanceBefore(sv.z);
+  var dToSecAfter = sv.validZDistanceAfter(sv.z);
   this.graphics.init(dToSecBefore, dToSecAfter);
 
   // Add extra nodes

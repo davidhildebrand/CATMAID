@@ -321,6 +321,21 @@
           'prefer_webgl',
           SETTINGS_SCOPE));
 
+      // WebGL tile layers
+      ds.append(wrapSettingsControl(
+          CATMAID.DOM.createCheckboxSetting(
+              "Skip broken sections of extra tile layers by default",
+              CATMAID.StackViewer.Settings[SETTINGS_SCOPE].respect_broken_sections_new_stacks,
+              'Choose whether layers added after the first one should be ' +
+              'respected by default when checking for broken sections during ' +
+              'navigation.',
+              function() {
+                CATMAID.StackViewer.Settings[SETTINGS_SCOPE].respect_broken_sections_new_stacks = this.checked;
+              }),
+          CATMAID.StackViewer.Settings,
+          'respect_broken_sections_new_stacks',
+          SETTINGS_SCOPE));
+
       // Major section step size
       ds.append(wrapSettingsControl(
           CATMAID.DOM.createNumericInputSetting(
@@ -602,7 +617,7 @@
                     "Reference the Nth component by using \"%N\". " +
                     "Use \"%f\" for a fallback that uses first available component " +
                     "from the top. Optionally, append \"{<em>delimiter</em>}\" to specify " +
-                    "how component values should be separeted, defaulting to \"{, }\".",
+                    "how component values should be separated, defaulting to \"{, }\".",
                     function () {
                       CATMAID.NeuronNameService.Settings
                         .set(
