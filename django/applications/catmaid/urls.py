@@ -314,8 +314,8 @@ urlpatterns += [
 
 # Cropping
 urlpatterns += [
-    url(r'^(?P<project_id>\d+)/crops', cropping.crop),
-    url(r'^crops/(?P<file_path>.*)/$', cropping.download_crop)
+    url(r'^(?P<project_id>\d+)/crop', cropping.crop),
+    url(r'^crop/download/(?P<file_path>.*)/$', cropping.download_crop)
 ]
 
 # Tagging
