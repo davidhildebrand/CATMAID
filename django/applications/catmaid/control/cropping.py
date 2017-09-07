@@ -561,16 +561,16 @@ def process_crop_job(job, create_message=True):
         msg.read = False
         if no_error_occured:
             file_name = os.path.basename( job.output_path )
-            url = os.path.join( settings.CATMAID_URL, "crop/download/" + file_name + "/")
-            msg.title = "Microstack finished"
-            msg.text = "The requested microstack %s is finished. You can " \
-                    "download it from this location: <a href='%s'>%s</a>" % \
+            url = os.path.join( settings.CATMAID_URL, "crops/" + file_name )
+            msg.title = "Cropped stack export finished"
+            msg.text = "The requested cropped stack export %s is finished. " \
+                    "You can download it from this location: <a href='%s'>%s</a>" % \
                     (bb_text, url, url)
             msg.action = url
         else:
-            msg.title = "Microstack could not be created"
-            msg.text = "The requested microstack %s could not be created due " \
-                    "to an error while saving the result (%s)." % \
+            msg.title = "Cropped stack could not be created"
+            msg.text = "The requested cropped stack export %s could not be " \
+                    "created due to an error while saving the result (%s)." % \
                     (bb_text, error_message)
             msg.action = ""
         msg.save()
@@ -694,7 +694,7 @@ def cleanup( max_age=1209600 ):
 
 @login_required
 def download_crop(request, file_path=None):
-    """ Retrieves a previously cropped micro_stack from its temporary location
+    """ Retrieves a previously cropped stack export from its temporary location
     and deletes the files afterwards.
     """
     # Optionally delete old files
