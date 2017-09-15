@@ -221,10 +221,10 @@ IMPORTER_DEFAULT_IMAGE_BASE = ''
 # relative to the path defined in Django's MEDIA_ROOT variable. These are
 # the default sub-folders, all of them need to be writable:
 MEDIA_HDF5_SUBDIRECTORY = 'hdf5'
-MEDIA_CROPPING_SUBDIRECTORY = 'cropping'
-MEDIA_ROI_SUBDIRECTORY = 'roi'
+MEDIA_CROPPING_SUBDIRECTORY = 'crops'
+MEDIA_ROI_SUBDIRECTORY = 'ROIs'
 MEDIA_TREENODE_SUBDIRECTORY = 'treenode_archives'
-MEDIA_EXPORT_SUBDIRECTORY = 'export'
+MEDIA_EXPORT_SUBDIRECTORY = 'exports'
 
 # The maximum allowed size in Bytes for generated files. The cropping tool, for
 # instance, uses this to cancel a request if the generated file grows larger

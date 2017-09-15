@@ -84,7 +84,7 @@
      * non-broken section.
      * @type {Boolean}
      */
-    this.hideIfNearestSliceBroken = false;
+    this.hideIfNearestSliceBroken = true;
 
     /**
      * Omit tiles with less area than this threshold visible.
