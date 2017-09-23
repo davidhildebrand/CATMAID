@@ -38,6 +38,12 @@
   night is now available. All it needs is to run a Celery worker and a Celery
   beat scheduler. The documentation has more details.
 
+- The cropping output file file name prefix and file extension can now be
+  specified from settings.py. The defaults are:
+
+  CROPPING_OUTPUT_FILE_EXTENSION = "tiff"
+  CROPPING_OUTPUT_FILE_PREFIX = "crop_"
+
 
 ### Features and enhancements
 
@@ -144,6 +150,10 @@ Miscellaneous:
 - When splitting a skeleton on a virtual node, the virtual node will now only be
   instantiated if the user presses OK in the dialog, canceling won't cause a
   change of the virtual node.
+
+- The default for hiding tile layers if the nearest section is broken (instead
+  of showing the next available) can now be configured from the Settings Widget
+  in its Stack View section.
 
 
 ### Bug fixes
