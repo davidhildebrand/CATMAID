@@ -3,6 +3,8 @@
 
 ### Notes
 
+- A virtualenv update is required.
+
 - This release adds optional statics summary tables, which can increase the
   performance of project/user statistics significantly, but statistics will also
   be correct without them. The additional table keeps aggregated information
@@ -30,6 +32,11 @@
   "stackFilterTerm". For both simple terms and regular expressions can be used.
   The filter input boxes can optionally be hidden by setting the "filter" config
   property to false.
+
+- Running periodic tasks is now easier and a default setup for cleaning up
+  cropping data at 23:30 and update tracing project statistics at 23:45 every
+  night is now available. All it needs is to run a Celery worker and a Celery
+  beat scheduler. The documentation has more details.
 
 
 ### Features and enhancements
@@ -73,7 +80,8 @@ Graph Widget:
 - Edge labels can now take different forms and can be configured in the
   properties dialog. There are two new label options available: "Fractions of
   outbound connections" and "Fractions of inbound connections". Instead of an
-  absolute number they display the relative fraction.
+  absolute number they display the relative fraction. This works for both
+  regular connections and connections involving groups.
 
 
 Reconstruction sampler:
@@ -82,6 +90,30 @@ Reconstruction sampler:
   It will open a new review widget with pre-set interval filter and added
   skeleton. The same is possible from the synapse workflow step using the
   "Review interval" button.
+
+
+Layouts:
+
+- The Stack View section of the Settings Widget allows now the configuration of
+  a list of default layouts that can be applied to newly opened stacks and stack
+  groups. Layouts are useful for having a reasonable default configuration of a
+  newly opened CATMAID workspace including stacks and stack groups.
+
+- Layouts mimic nested function calls and are constructed from v(a,b) and h(a,b)
+  elements for vertical and horizontal splits, o(a) for optional windows, where
+  a and b can each be other v() or h() nodes, one of [XY, XZ, ZY, F1, X3D] or any
+  quoted widget handle (e.g. "neuron-search", see Ctrl + Space). At the moment,
+  in o(a), "a" can't be XY, XZ or ZY. To reference the 3D Viewer use X3D.
+
+- By default only one layout is available: organize XY, XZ and ZY in four
+  quadrants using one additional window (if non available the help page). This
+  is its specification: h(v(XY, XZ), v(ZY, o(F1))). With h() and v(), horizontal
+  and vertical splits are declared, respectively. With o(F1) a help window will
+  be opened as fourth window if not already another window exists.
+
+- Useful for organizing orthogonal views in a custom way and to create default
+  workspaces. For instance, to always open a Neuron Search widget right to the
+  a single XY view stack, the layout can be used: h(XY, "neuron-search").
 
 
 Miscellaneous:
@@ -108,6 +140,10 @@ Miscellaneous:
 - The Selection Tool (the first icon in the top bar) has been removed, because
   it didn't provide any functionality. It is replaced by an icon to show the
   "Open Widget" dialog, which can otherwise be shown using Ctrl + Space.
+
+- When splitting a skeleton on a virtual node, the virtual node will now only be
+  instantiated if the user presses OK in the dialog, canceling won't cause a
+  change of the virtual node.
 
 
 ### Bug fixes
@@ -151,6 +187,9 @@ Miscellaneous:
 
 - Dragging nodes in stacks with smaller resolutions (larger nm/px) doesn't
   require large drag distances anymore, before the move is registered.
+
+- Node selection works now reliably with orthogonal views, including using the
+  "G" key.
 
 
 ## 2017.07.28

@@ -50,7 +50,7 @@ var SkeletonAnnotations = {
  */
 SkeletonAnnotations.handleDeletedNode = function(nodeId, parentId) {
   // Use == to allow string and integer IDs
-  if (nodeId == SkeletonAnnotations.getActiveNodeId()) {
+  if (nodeId == SkeletonAnnotations.getActiveNodeId() && parentId) {
     SkeletonAnnotations.staticSelectNode(parentId)
       .catch(CATMAID.handleError);
   }
@@ -225,16 +225,34 @@ SkeletonAnnotations.getTracingOverlayBySkeletonElements = function(skeletonEleme
 
 /**
  * Select a node in any of the existing TracingOverlay instances, by its ID.
- * WARNING: Will only select the node in the first TracingOverlay found to contain it.
+ * Will return a rejected promise if the node could not be selected in all stack
+ * viewers. This behavior can be changed using the <singleMatchValid> parameter
+ * to require only a single viewer to have the node to return a resolved
+ * promise. All stack viewers are asked to select the node.
  */
-SkeletonAnnotations.staticSelectNode = function(nodeID) {
+SkeletonAnnotations.staticSelectNode = function(nodeId, singleMatchValid) {
+  var nFound = 0;
+  var incFound = function() { ++nFound; };
+  var selections = [];
   var instances = this.TracingOverlay.prototype._instances;
-  for (var stack in instances) {
-    if (instances.hasOwnProperty(stack)) {
-      return instances[stack].selectNode(nodeID);
+  for (var stackViewerId in instances) {
+    if (instances.hasOwnProperty(stackViewerId)) {
+      var select = instances[stackViewerId].selectNode(nodeId);
+      selections.push(select.then(incFound));
     }
   }
-  CATMAID.statusBar.replaceLast("Could not find node #" + nodeID);
+
+  // Wait until we tried to select the node in all viewers.
+  return Promise.all(selections)
+    .catch(function(error) {
+      if (nFound === 0) {
+        CATMAID.statusBar.replaceLast("Could not find node #" + nodeId);
+        throw error;
+      }
+      if (nFound !== instances.length && !singleMatchValid) {
+        throw error;
+      }
+    });
 };
 
 /**
@@ -1688,49 +1706,47 @@ SkeletonAnnotations.TracingOverlay.prototype.rerootSkeleton = function(nodeID) {
 
 /**
  * Split the skeleton of the given node (ID). If this node happens to be
- * virtual and the skeleton is editable, the node is created before the split
- * dialog is shown. For now, the user is responsible of removing this node
- * again.
+ * virtual and the skeleton is editable, the node is created after the user
+ * pressed OK in the dialog, canceling will not change the virtual node.
  */
-SkeletonAnnotations.TracingOverlay.prototype.splitSkeleton = function(nodeID) {
-  if (!this.checkLoadedAndIsNotRoot(nodeID)) return;
+SkeletonAnnotations.TracingOverlay.prototype.splitSkeleton = function(nodeId) {
+  if (!this.checkLoadedAndIsNotRoot(nodeId)) return;
   var self = this;
-  var node = self.nodes[nodeID];
+  var node = self.nodes[nodeId];
   // Make sure we have permissions to edit the neuron
   this.executeIfSkeletonEditable(node.skeleton_id, function() {
-    // Make sure the load is not virtual
-    self.promiseNode(node).then(function(nodeId) {
-      // Make sure we reference the correct node and create a model
-      node = self.nodes[nodeId];
-      var name = CATMAID.NeuronNameService.getInstance().getName(node.skeleton_id);
-      var model = new CATMAID.SkeletonModel(node.skeleton_id, name, new THREE.Color(1, 1, 0));
-      /* Create the dialog */
-      var dialog = new CATMAID.SplitMergeDialog({
-        model1: model,
-        splitNodeId: nodeId,
-        split: function() {
-          // Get upstream and downstream annotation set
-          var upstream_set, downstream_set;
-          if (self.upstream_is_small) {
-            upstream_set = dialog.get_under_annotation_set();
-            downstream_set = dialog.get_over_annotation_set();
-          } else {
-            upstream_set = dialog.get_over_annotation_set();
-            downstream_set = dialog.get_under_annotation_set();
-          }
-          // Call backend
-          self.submit.then(function() {
+    // Make sure we reference the correct node and create a model
+    var name = CATMAID.NeuronNameService.getInstance().getName(node.skeleton_id);
+    var model = new CATMAID.SkeletonModel(node.skeleton_id, name, new THREE.Color(1, 1, 0));
+    /* Create the dialog */
+    var dialog = new CATMAID.SplitMergeDialog({
+      model1: model,
+      splitNodeId: nodeId,
+      split: function() {
+        // Get upstream and downstream annotation set
+        var upstream_set, downstream_set;
+        if (self.upstream_is_small) {
+          upstream_set = dialog.get_under_annotation_set();
+          downstream_set = dialog.get_over_annotation_set();
+        } else {
+          upstream_set = dialog.get_over_annotation_set();
+          downstream_set = dialog.get_under_annotation_set();
+        }
+        // Call backend
+        self.submit.promise()
+          .then(function() {
+            return self.promiseNode(node);
+          }).then(function(splitNodeId) {
             var command = new CATMAID.SplitSkeletonCommand(self.state,
-                project.id, nodeId, upstream_set, downstream_set);
+                project.id, splitNodeId, upstream_set, downstream_set);
             CATMAID.commands.execute(command)
               .then(function(result) {
-                self.updateNodes(function () { self.selectNode(nodeId); });
+                self.updateNodes(function () { self.selectNode(splitNodeId); });
               }).catch(CATMAID.handleError);
           }, CATMAID.handleError, true);
-        }
-      });
-      dialog.show();
+      }
     });
+    dialog.show();
   });
 };
 
@@ -2766,28 +2782,30 @@ SkeletonAnnotations.TracingOverlay.prototype._createNodeOrLink = function(insert
         // then return the node creation promise so that node creation and its
         // resulting active node change resolve before any other submitter queue
         // items are processed.
-        create = this.submit.promise((function () {
+        create = this.submit.then((function () {
           // Create a new treenode, either root node if atn is null, or child if
           // it is not null
           if (null !== SkeletonAnnotations.atn.id) {
             var self = this;
             return new Promise(function (resolve, reject) {
               // Make sure the parent exists
-              SkeletonAnnotations.atn.promise().then(function(atnId) {
-                CATMAID.statusBar.replaceLast("Created new node as child of node #" + atnId);
-                self.createNode(atnId, null, phys_x, phys_y, phys_z, -1, 5,
-                    pos_x, pos_y, pos_z, postCreateFn).then(resolve, reject);
-              }).catch(function(error) {
-                reject();
-                CATMAID.handleError(error);
-              });
+              SkeletonAnnotations.atn.promise()
+                .then(function(atnId) {
+                  CATMAID.statusBar.replaceLast("Created new node as child of node #" + atnId);
+                  self.createNode(atnId, null, phys_x, phys_y, phys_z, -1, 5,
+                      pos_x, pos_y, pos_z, postCreateFn)
+                    .then(resolve, reject);
+                }).catch(function(error) {
+                  reject();
+                  CATMAID.handleError(error);
+                });
             });
           } else {
             // Create root node
             return this.createNode(null, null, phys_x, phys_y, phys_z, -1, 5,
                 pos_x, pos_y, pos_z, postCreateFn);
           }
-        }).bind(this));
+        }).bind(this)).promise();
       } else if (CATMAID.Connectors.SUBTYPE_SYNAPTIC_CONNECTOR === atn.subtype) {
         // create new treenode (and skeleton) presynaptic to activated connector
         // if the connector doesn't have a presynaptic node already
@@ -4358,6 +4376,13 @@ SkeletonAnnotations.TracingOverlay.prototype._deleteTreenode =
     // ensure the node, if it had any changes, these won't be pushed to the database: doesn't exist anymore
     self.nodeIDsNeedingSync.delete(node.id);
 
+    // Make sure, we got a list of all partners before we delete the node data
+    // structure. This is only needed if the node was active and has no parent
+    // node, because the partner information is used for making another node
+    // active.
+    var partners = wasActiveNode && !json.parent_id ?
+        self.findConnectors(node.id) : null;
+
     // Delete any connector links
     for (var connectorId in node.connectors) {
       var connector = self.nodes[connectorId];
@@ -4381,9 +4406,15 @@ SkeletonAnnotations.TracingOverlay.prototype._deleteTreenode =
     if (parent) {
       delete parent.children[node.id];
     }
+
+    // Store node ID before node gets reset
+    var nodeId = node.id;
+
     node.obliterate();
     node.drawEdges();
     self.pixiLayer._renderIfReady();
+
+    CATMAID.statusBar.replaceLast("Deleted node #" + nodeId);
 
     // activate parent node when deleted
     if (wasActiveNode) {
@@ -4392,23 +4423,20 @@ SkeletonAnnotations.TracingOverlay.prototype._deleteTreenode =
       } else {
         // No parent. But if this node was postsynaptic or presynaptic
         // to a connector, the connector must be selected:
-        var pp = self.findConnectors(node.id);
         // Try first connectors for which node is postsynaptic:
-        if (pp[1].length > 0) {
-          self.selectNode(pp[1][0]).catch(CATMAID.handleError);
+        if (partners[1].length > 0) {
+          self.selectNode(partners[1][0]).catch(CATMAID.handleError);
         // Then try connectors for which node is presynaptic
-        } else if (pp[0].length > 0) {
-          self.selectNode(pp[0][0]).catch(CATMAID.handleError);
+        } else if (partners[0].length > 0) {
+          self.selectNode(partners[0][0]).catch(CATMAID.handleError);
         // Then try connectors for which node has gap junction with
-        } else if (pp[2].length > 0) {
-          self.selectNode(pp[2][0]).catch(CATMAID.handleError);
+        } else if (partners[2].length > 0) {
+          self.selectNode(partners[2][0]).catch(CATMAID.handleError);
         } else {
           self.activateNode(null);
         }
       }
     }
-    // Nodes are refreshed due to the change event the neuron controller emits
-    CATMAID.statusBar.replaceLast("Deleted node #" + node.id);
   })
   .promise()
   .catch(CATMAID.handleError);
@@ -4455,9 +4483,6 @@ SkeletonAnnotations.TracingOverlay.prototype.deleteNode = function(nodeId) {
 
   // Unset active node to avoid actions that involve the deleted node
   var isActiveNode = (node.id === SkeletonAnnotations.getActiveNodeId());
-  if (isActiveNode) {
-    this.activateNode(null);
-  }
 
   // Call actual delete methods defined below (which are callable due to
   // hoisting)
@@ -4673,9 +4698,9 @@ SkeletonAnnotations.TracingOverlay.prototype.importActiveNode = function(node) {
   }
 
   // Get project coordinates
-  var x = sourceStackViewer.primaryStack.stackToProjectX(node.z, node.y, node.z);
-  var y = sourceStackViewer.primaryStack.stackToProjectY(node.z, node.y, node.z);
-  var z = sourceStackViewer.primaryStack.stackToProjectZ(node.z, node.y, node.z);
+  var x = sourceStackViewer.primaryStack.stackToProjectX(node.z, node.y, node.x);
+  var y = sourceStackViewer.primaryStack.stackToProjectY(node.z, node.y, node.x);
+  var z = sourceStackViewer.primaryStack.stackToProjectZ(node.z, node.y, node.x);
 
   // Get stack coordinates for target stack
   var xs = this.stackViewer.primaryStack.projectToUnclampedStackX(z, y, x);

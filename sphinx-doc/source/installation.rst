@@ -284,22 +284,26 @@ You can run the Django development server with::
     ./manage.py runserver
 
 You should then be able to visit your instance of catmaid at `http://localhost:8000
-<http://localhost:8000>`_
+<http://localhost:8000>`_. Note though that in its default configuration CATMAID
+will prevent static files from being served with the ``runserver`` command and
+while the website should load it may not look like expected. To temporarily
+allow this to test without enabling debug mode, set ``SERVE_STATIC = True`` in
+``settings.py``. For a production setup, the webserver should take care of
+serving static files.
 
 10. Setting up a production webserver
 #####################################
 
-You have various options for setting up CATMAID with a
-production webserver - you can choose from (at least) the
-following options:
+You have various options for setting up CATMAID with a production webserver -
+you can choose from (at least) the following options:
 
-1. Nginx and either gevent, uWSGI or Gunicorn, in which case see
-   :ref:`alternative-install`
+1. Nginx and either Gevent, uWSGI or Gunicorn, in which case see
+   :ref:`nginx`
 
 2. Apache + mod_wsgi, in which case see :ref:`apache`
 
-We usually prefer to use Nginx because of a more straight-forward configuration,
-smaller memory footprint and better performance wirh available WSGI servers.
+We prefer to use Nginx because of a more straight-forward configuration, smaller
+memory footprint and better performance with available WSGI servers.
 
 Note if the domain you are serving your image data from is different from where
 CATMAID is running, `CORS <https://en.wikipedia.org/wiki/Cross-origin_resource_sharing>`_

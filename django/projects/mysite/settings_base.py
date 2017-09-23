@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+from __future__ import absolute_import
 
 # General Django settings for mysite project.
 
@@ -10,6 +11,8 @@ import logging
 import mysite.pipelinefiles as pipelinefiles
 import mysite.utils as utils
 import six
+
+from celery.schedules import crontab
 
 try:
     import psycopg2
@@ -29,6 +32,11 @@ PROJECT_ROOT = utils.relative('..', '..')
 for subdirectory in ('projects', 'applications', 'lib'):
     full_path = os.path.join(PROJECT_ROOT, subdirectory)
     sys.path.insert(0, full_path)
+
+# FIXME: Newer GEOS versions won't be detected correctly in Django 1.10 and a
+# monkey patch is required. This can be removed when updating to Django 1.11.
+import custom_geos_importer
+custom_geos_importer.patch()
 
 # A list of people who get code error notifications. They will get an email
 # if DEBUG=False and a view raises an exception.
@@ -241,15 +249,6 @@ USER_REGISTRATION_ALLOWED = False
 # A new user's defaul groups
 NEW_USER_DEFAULT_GROUPS = []
 
-# A sequence of modules that contain Celery tasks which we want Celery to know
-# about automatically.
-CELERY_IMPORTS = (
-    'catmaid.control.cropping',
-    'catmaid.control.roi',
-    'catmaid.control.treenodeexport',
-    'catmaid.control.nat'
-)
-
 # While pickle can cause security problems [1], we allow it for now and trust
 # that the Celery server will only accept connections from CATMAID. To improve
 # security, this should be changed though, see also [2].
@@ -257,6 +256,20 @@ CELERY_IMPORTS = (
 # [2] https://github.com/catmaid/CATMAID/issues/630
 CELERY_ACCEPT_CONTENT = ['pickle']
 CELERY_TASK_SERIALIZER = 'pickle'
+
+# The default set of periodic tasks
+CELERY_BEAT_SCHEDULE = {
+    # Clean cropped stack directory every night at 23:30.
+    'daily-crop-data-cleanup': {
+        'task': 'catmaid.tasks.cleanup_cropped_stacks',
+        'schedule': crontab(hour=23, minute=30)
+    },
+    # Update project statistics every night at 23:45.
+    'daily-project-stats-summary-update': {
+        'task': 'catmaid.tasks.update_project_statistics',
+        'schedule': crontab(hour=23, minute=45)
+    }
+}
 
 # We use django-pipeline to compress and reference JavaScript and CSS files. To
 # make Pipeline integrate with staticfiles (and therefore collecstatic calls)

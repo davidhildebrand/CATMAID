@@ -23,6 +23,25 @@
     this.refreshAutoCacheUpdate();
 
     /**
+     * Return the stack viewer referenced by the active node, or otherwise (if
+     * unavailable) use the tracing tool's active stack viewer.
+     */
+    var getActiveNodeStackViewer = function() {
+      var stackViewerId = SkeletonAnnotations.atn.stack_viewer_id;
+      return stackViewerId === undefined ?
+          activeStackViewer : project.getStackViewer(stackViewerId);
+    };
+
+    var getActiveNodeTracingLayer = function() {
+      var stackViewer = getActiveNodeStackViewer();
+      var tracingLayer = stackViewer.getLayer(getTracingLayerName(stackViewer));
+      if (!tracingLayer) {
+        throw new CATMAID.ValueError("Can't find tracing layer for active node");
+      }
+      return tracingLayer;
+    };
+
+    /**
      * Set postAction option of a command to update of the active tracing layer,
      * if it is available.
      *
@@ -803,7 +822,8 @@
       run: function (e) {
         if (!CATMAID.mayEdit())
           return false;
-        activeTracingLayer.tracingOverlay.splitSkeleton(SkeletonAnnotations.getActiveNodeId());
+        var tracingLayer = getActiveNodeTracingLayer();
+        tracingLayer.tracingOverlay.splitSkeleton(SkeletonAnnotations.getActiveNodeId());
         return true;
       }
     }));
@@ -816,7 +836,8 @@
       run: function (e) {
         if (!CATMAID.mayEdit())
           return false;
-        activeTracingLayer.tracingOverlay.rerootSkeleton(SkeletonAnnotations.getActiveNodeId());
+        var tracingLayer = getActiveNodeTracingLayer();
+        tracingLayer.tracingOverlay.rerootSkeleton(SkeletonAnnotations.getActiveNodeId());
         return true;
       }
     }));
@@ -962,7 +983,7 @@
           if (selectedNode) {
             // If this layer has a node close by, activate it
             if (activeTracingLayer.stackViewer.z === selectedNode.node.z) {
-              SkeletonAnnotations.staticSelectNode(selectedNode.id)
+              SkeletonAnnotations.staticSelectNode(selectedNode.id, true)
                 .catch(CATMAID.handleError);
             } else {
               SkeletonAnnotations.staticMoveToAndSelectNode(selectedNode.id)

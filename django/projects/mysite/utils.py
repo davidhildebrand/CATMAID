@@ -14,10 +14,14 @@ def get_version():
     """
     try:
         dir = os.path.dirname(os.path.realpath(__file__))
-        p = subprocess.Popen("/usr/bin/git describe", cwd=os.path.dirname(dir),
-                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Universal newlines is used to get both Python 2 and 3 to use text mode.
+        p = subprocess.Popen("/usr/bin/git describe --always", cwd=os.path.dirname(dir),
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True)
         (out, error) = p.communicate()
-        return "unknown" if error else out.rstrip().encode('utf-8')
+        # We need to encode and decode the bytestring to make this work in both
+        # Python 2 and 3.
+        return "unknown" if error else out.rstrip().encode('utf-8').decode('utf-8')
     except:
         return "unknown"
 
